@@ -224,3 +224,50 @@ all_lstm_outputs, state = tf.nn.dynamic_rnn(drop_multi_cell, all_inputs, initial
 all_lstm_outputs = tf.reshape(all_lstm_outputs, [batch_size*num_unrollings,num_nodes[-1]])
 all_outputs = tf.nn.xw_plus_b(all_lstm_outputs, w, b)
 split_outputs = tf.split(all_outputs, num_unrollings, axis=0)
+
+# calculating loss
+print('Defining training loss')
+loss = 0.0
+with tf.control_dependencies([tf.assign(c[li], state[li][0]) for li in range(n_layers)] +
+                             [tf.assign(c[li], state[li][0]) for li in range(n_layers)]):
+    for ui in range(num_unrollings):
+        loss += tf.reduce_mean(0.5*(split_outputs[ui]-train_outputs[ui])**2)
+
+print('Learning rate decay operations')
+global_step = tf.Variable(0,trainable=False)
+inc_gstep = tf.assign(global_step,global_step+1)
+tf_learning_rate = tf.placeholder(shape=None,dtype=tf.float32)
+tf_min_learning_rate = tf.placeholder(shape=None,dtype=tf.float32)
+
+learning_rate = tf.maximum(tf.train.exponential_decay(tf_learning_rate,global_step,decay_steps=1,decay_rate=0.5,staircase=True),
+                            tf_min_learning_rate)
+
+# optimiser
+print('TF Optimisation operations')
+optimiser = tf.train.AdamOptimiser(learning_rate)
+gradients, v = zip(*optimiser.compute_gradients(loss))
+gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+optimiser = optimiser.apply_gradients(zip(gradients, v))
+print('\tAll done')
+
+print('Defining prediction related TF functions')
+sample_inputs = tf.placeholder(tf.float32, shape=[1,D])
+
+sample_c, sample_h, initial_sample_state = [], [], []
+for li in range(n_layers):
+    sample_c.append(tf.Variable(tf.zeros([1, num_nodes[li]]), trainable=False))
+    sample_h.append(tf.Variable(tf.zeros([1, num_nodes[li]]), trainable=False))
+    initial_sample_state.append(tf.contrib.rnn.LSTMStateTuple(sample_c[li], sample_h[li]))
+
+reset_sample_states = tf.group(*[tf.assign(sample_c[li], tf.zeros([1,num_nodes[li]])) for li in range(n_layers)],
+                               *[tf.assign(sample_h[li], tf.zeros([1,num_nodes[li]])) for li in range(n_layers)])
+
+sample_outputs, sample_state = tf.nn.dynamic_rnn(multi_cell, tf.expand_dims(sample_inputs,0),
+                                    initial_state=tuple(initial_sample_state),
+                                    time_major=True,
+                                    dtype=tf.float32)
+
+with tf.control_dependencies([tf.assign(sample_c[li], sample_state[li][0]) for li in range(n_layers)] +
+                             [tf.assign(sample_h[li], sample_state[li][1]) for li in range(n_layers)]):
+    sample_prediction = tf.nn.xw_plus_b(tf.reshape(sample_outputs,[1,-1]), w, b)
+print('\tAll done')
