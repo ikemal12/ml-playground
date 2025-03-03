@@ -132,3 +132,64 @@ plt.xlabel('Date')
 plt.ylabel('Mid Price')
 plt.legend(fontsize=18)
 plt.show()
+
+# data generator 
+class DataGeneratorSeq(object):
+    def __init__(self, prices, batch_size, num_unroll):
+        self._prices = prices
+        self._prices_length = len(self._prices) - num_unroll
+        self._batch_size = batch_size
+        self._num_unroll = num_unroll
+        self._segments = self._prices_length // self._batch_size
+        self._cursor = [offset * self._segments for offset in range(self._batch_size)]
+
+    def unroll_batches(self):
+        unroll_data, unroll_labels = [], []
+        init_data, init_label = None, None
+        for ui in range(self._num_unroll):
+            data, labels = self.next_batch()
+            unroll_data.append(data)
+            unroll_labels.append(labels)
+        return unroll_data, unroll_labels
+
+    def next_batch(self):
+        batch_data = np.zeros((self._batch_size), dtype=np.float32)
+        batch_labels = np.zeros((self._batch_size), dtype=np.float32)
+
+        for b in range(self._batch_size):
+            if self._cursor[b]+1 >= self._prices_length:
+                self._cursor[b] = np.random.randint(0,(b+1)*self._segments)
+            
+            batch_data[b] = self._prices[self._cursor[b]]
+            batch_labels[b] = self._prices[self._cursor[b] + np.random.randint(0,5)]
+            self._cursor[b] = (self._cursor[b]+1)%self._prices_length   
+        return batch_data, batch_labels
+
+    def reset_indices(self):
+        for b in range(self._batch_size):
+            self._cursor[b] = np.random.randint(0,min((b+1)*self._segments,self._prices_length-1))
+
+dg = DataGeneratorSeq(train_data,5,5)
+u_data, u_labels = dg.unroll_batches()#
+
+for ui, (dat, lbl) in enumerate(zip(u_data, u_labels)):
+    print('\n\nUnrolled index %d'%ui)
+    dat_ind = dat
+    lbl_ind = lbl
+    print('\tInputs: ',dat )
+    print('\n\tOutput:',lbl)
+
+# hyperparameters
+D = 1
+num_unrollings = 50
+batch_size = 500
+num_nodes = [200,200,150]
+n_layers = len(num_nodes)
+dropout = 0.2
+
+#tf.reset_default_graph()
+
+train_inputs, train_outputs = []
+for ui in range(num_unrollings):
+    train_inputs.append(tf.placeholder(tf.float32, shape=[batch_size,D],name='train_inputs_%d'%ui))
+    train_outputs.append(tf.placeholder(tf.float32, shape=[batch_size,1], name = 'train_outputs_%d'%ui))       
