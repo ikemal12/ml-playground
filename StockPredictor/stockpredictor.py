@@ -368,3 +368,32 @@ for ep in range(epochs):
             predictions_over_time.append(predictions_seq)
             print('\tFinished Predictions')
 
+# visualising predictions
+best_prediction_epoch = 28
+
+plt.figure(figsize = (18,18))
+plt.subplot(2,1,1)
+plt.plot(range(df.shape[0]),all_mid_data,color='b')
+
+start_alpha = 0.25
+alpha  = np.arange(start_alpha,1.1,(1.0-start_alpha)/len(predictions_over_time[::3]))
+for p_i,p in enumerate(predictions_over_time[::3]):
+    for xval,yval in zip(x_axis_seq,p):
+        plt.plot(xval,yval,color='r',alpha=alpha[p_i])
+
+plt.title('Evolution of Test Predictions Over Time',fontsize=18)
+plt.xlabel('Date',fontsize=18)
+plt.ylabel('Mid Price',fontsize=18)
+plt.xlim(11000,12500)
+
+plt.subplot(2,1,2)
+
+plt.plot(range(df.shape[0]),all_mid_data,color='b')
+for xval,yval in zip(x_axis_seq,predictions_over_time[best_prediction_epoch]):
+    plt.plot(xval,yval,color='r')
+
+plt.title('Best Test Predictions Over Time',fontsize=18)
+plt.xlabel('Date',fontsize=18)
+plt.ylabel('Mid Price',fontsize=18)
+plt.xlim(11000,12500)
+plt.show()
